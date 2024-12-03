@@ -1,72 +1,178 @@
-﻿/*
-statt var benutzt man normalerweise IEnumerable<datentyp>
-
-IEnumerable<int> gefilterteZahlen = from zahl in zahlen
-                                    where zahl > 5
-                                    select zahl;
--------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-mit var wird der Typ automatisch bestimmt und die syntax ist kürzer!
-
-var gefilterteZahlen = from zahl in zahlen
-                                   where zahl > 5
-                                   select zahl;
-
--------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-Erklärung
-IEnumerable<int>
-
-Das ist der spezifische Typ, der die gefilterten Zahlen repräsentiert.
-IEnumerable steht für eine Sammlung, die sequenziell durchlaufen werden kann (z. B. in einer foreach-Schleife).
-Warum wird oft var verwendet?
-
-var ist praktischer, weil der Typ automatisch aus dem Kontext abgeleitet wird. 
-Es macht den Code kürzer und lesbarer, insbesondere bei komplexeren LINQ-Abfragen.
-Aber wenn du explizit angeben möchtest, was der Rückgabewert ist (z. B. zur besseren Lesbarkeit oder Typensicherheit), dann verwendest du IEnumerable<int>.
-
--------------------------------------------------------------------------------------------------------------------------------------------------------------
-foreach (var item in collection)
-            {
-
-            }
-
-
--------------------------------------------------------------------------------------------------------------------------------------------------------------
-Unterschied:
-Console.ReadLine(): Wartet auf die Eingabe einer vollständigen Zeile (Drücken der Enter-Taste).
-Console.ReadKey(): Wartet auf einen einzigen Tastendruck (keine Enter-Taste nötig).
- */
-
-using System;
-using System.Collections.Generic;
+﻿using System;
+using System.Data.SqlClient;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace LinqTest
 {
+    // Repräsentiert eine Universität
+    public class Universitaet
+    {
+        public int UniversitaetID { get; set; }
+        public string Name { get; set; }
+        public string Standort { get; set; }
+    }
+
+    // Repräsentiert eine Person
+    public class Person
+    {
+        public int PersonID { get; set; }
+        public string Vorname { get; set; }
+        public string Nachname { get; set; }
+        public int UniversitaetID { get; set; }
+        public Universitaet Universitaet { get; set; }
+    }
+
     internal class Program
     {
         static void Main(string[] args)
         {
-            // Ein Array von Zahlen
-            int[] zahlen = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+            // Verbindungszeichenfolge zur SQL-Datenbank
+            string connectionString = "Server=wasnezow;Database=UniversitaetDB;Trusted_Connection=True;";
 
-            // LINQ-Abfragen: Collection == die gennate 'gefilterteZahlen' da soll eine zahl aus dem array 'zahlen' ausgegeben werden die größer > 5 ist!
-            var gefilterteZahlen = from zahl in zahlen
-                                   where zahl > 5
-                                   select zahl;
+            // Listen zur Speicherung der Daten
+            List<Universitaet> universitaeten = new List<Universitaet>();
+            List<Person> personen = new List<Person>();
 
-            // Ergebnisse ausgeben
-            Console.WriteLine("Zahlen größer als 5:");
-            foreach (var zahl in gefilterteZahlen)
+            try
             {
-                Console.WriteLine(zahl);
-                
+                // Mit der Datenbank verbinden und Daten abfragen
+                using (SqlConnection connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+                    Console.WriteLine("Verbindung zur Datenbank erfolgreich!");
+
+                    // Abfrage für Universitäten
+                    string uniQuery = "SELECT UniversitaetID, Name, Standort FROM Universitaeten";
+                    using (SqlCommand command = new SqlCommand(uniQuery, connection))
+                    {
+                        SqlDataReader reader = command.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            Universitaet universitaet = new Universitaet
+                            {
+                                UniversitaetID = reader.GetInt32(0),
+                                Name = reader.GetString(1),
+                                Standort = reader.GetString(2)
+                            };
+                            universitaeten.Add(universitaet);
+                        }
+                        reader.Close();
+                    }
+
+                    // Abfrage für Personen
+                    string personQuery = "SELECT PersonID, Vorname, Nachname, UniversitaetID FROM Personen";
+                    using (SqlCommand command = new SqlCommand(personQuery, connection))
+                    {
+                        SqlDataReader reader = command.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            Person person = new Person
+                            {
+                                PersonID = reader.GetInt32(0),
+                                Vorname = reader.GetString(1),
+                                Nachname = reader.GetString(2),
+                                UniversitaetID = reader.GetInt32(3),
+                                Universitaet = universitaeten.FirstOrDefault(u => u.UniversitaetID == reader.GetInt32(3)) // Universitaet aus der Liste zuweisen
+                            };
+                            personen.Add(person);
+                        }
+                        reader.Close();
+                    }
+
+                    connection.Close();
+                }
+
+                // Manuell eine neue Universität hinzufügen
+                Universitaet neueUniversitaet = new Universitaet
+                {
+                    UniversitaetID = 999, // Neue ID für die Universität
+                    Name = "Neue Universität",
+                    Standort = "Berlin"
+                };
+                universitaeten.Add(neueUniversitaet);
+
+                // Manuell eine neue Person hinzufügen
+                Person neuePerson = new Person
+                {
+                    PersonID = 9999, // Neue ID für die Person
+                    Vorname = "Max",
+                    Nachname = "Mustermann",
+                    UniversitaetID = 999, // ID der Universität, zu der die Person gehört
+                    Universitaet = neueUniversitaet // Setzen der Universität
+                };
+                personen.Add(neuePerson);
+
+                // Überprüfen, ob Daten abgerufen wurden
+                if (universitaeten.Count == 0)
+                {
+                    Console.WriteLine("Keine Universitäten gefunden.");
+                }
+                else
+                {
+                    Console.WriteLine($"Es wurden {universitaeten.Count} Universitäten gefunden.");
+                }
+
+                if (personen.Count == 0)
+                {
+                    Console.WriteLine("Keine Personen gefunden.");
+                }
+                else
+                {
+                    Console.WriteLine($"Es wurden {personen.Count} Personen gefunden.");
+                }
+
+                // LINQ-Abfrage: Personen, deren Vorname "Max" ist
+                IEnumerable<Person> gefiltertePersonen = from person in personen
+                                                         where person.Vorname == "Max"
+                                                         select person;
+
+                // Ergebnisse ausgeben
+                Console.WriteLine("Gefilterte Personen (Vorname 'Max'):");
+
+                foreach (Person person in gefiltertePersonen)
+                {
+                    Console.WriteLine($"{person.Vorname} {person.Nachname} - Universität: {person.Universitaet?.Name}");
+                }
+
+                // LINQ-Abfrage: Alle Universitäten und die Anzahl der Personen
+                var universitaetMitPersonen = from uni in universitaeten
+                                              join person in personen on uni.UniversitaetID equals person.UniversitaetID
+                                              group person by uni.Name into uniGroup
+                                              select new
+                                              {
+                                                  UniversitaetName = uniGroup.Key,
+                                                  PersonenCount = uniGroup.Count()
+                                              };
+
+                // Ausgabe der geladenen Universitäten
+                Console.WriteLine("Universitäten:");
+                foreach (var universitaet in universitaeten)
+                {
+                    Console.WriteLine($"ID: {universitaet.UniversitaetID}, Name: {universitaet.Name}, Standort: {universitaet.Standort}");
+                }
+
+                // Ausgabe der geladenen Personen
+                Console.WriteLine("\nPersonen:");
+                foreach (var person in personen)
+                {
+                    Console.WriteLine($"ID: {person.PersonID}, Vorname: {person.Vorname}, Nachname: {person.Nachname}, UniversitätID: {person.UniversitaetID}");
+                }
+
+                // Ausgabe der Universitäten mit Personenzahl
+                Console.WriteLine("\nUniversitäten mit Personenzahl:");
+                foreach (var item in universitaetMitPersonen)
+                {
+                    Console.WriteLine($"Universität: {item.UniversitaetName}, Anzahl der Personen: {item.PersonenCount}");
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Fehler: {ex.Message}");
             }
 
-            Console.ReadKey(); // wartet ausßerhalb der schleife auf einen tastendruck um das programm zu schließen
+            Console.ReadKey(); // wartet auf einen Tastendruck, um das Programm zu schließen
         }
     }
 }
